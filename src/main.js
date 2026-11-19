@@ -96,6 +96,7 @@ function render() {
   const r = root();
   if (state.view === 'tripRoom') r.innerHTML = renderTripRoom();
   else if (state.view === 'createTrip') r.innerHTML = renderCreateTrip();
+  else if (state.view === 'myTrips') r.innerHTML = renderMyTrips();
   else r.innerHTML = renderDiscovery();
   applyTheme();
   attachEvents();
@@ -123,6 +124,7 @@ function navbarHTML() {
         <a class="navbar-brand" href="#" data-nav="discovery">VIBETRIP</a>
         <nav class="navbar-nav" aria-label="Navigasi utama">
           <a href="#" data-nav="discovery">Eksplorasi</a>
+          <a href="#" data-nav="myTrips">Trip Saya</a>
           <a href="#" data-nav="createTrip">Buat Trip</a>
         </nav>
         <div class="nav-actions">
@@ -153,12 +155,14 @@ function renderDiscovery() {
     const creator = getUser(trip.creator_id);
     const seatsLeft = trip.max_pax - trip.members.length;
     const slotIndicators = Array.from({ length: trip.max_pax }, (_, k) => k < trip.members.length ? '■' : '□').join(' ');
+    const joined = trip.members.includes(state.currentUser.id);
     return `
       <article class="trip-card" data-aos="fade-up" data-aos-delay="${Math.min(i*60,400)}">
         <div class="trip-card-head">
           <h3 class="trip-title">${escapeHTML(trip.title)}</h3>
           <span class="vibe-badge">${escapeHTML(trip.vibe)}</span>
         </div>
+        ${joined ? '<span class="joined-badge">SUDAH BERGABUNG</span>' : ''}
         <p class="trip-dest">${escapeHTML(trip.destination_area)} • ${escapeHTML(trip.start_date)}</p>
         <p class="trip-vehicle">${escapeHTML(trip.vehicle_type)}</p>
         <div class="seat-slots" aria-label="Slot kursi">${slotIndicators} <span class="seat-left">Sisa ${seatsLeft} Kursi</span></div>
@@ -173,7 +177,9 @@ function renderDiscovery() {
         ${trip.women_only ? '<span class="women-badge">WOMEN-ONLY</span>' : ''}
         <div class="trip-actions">
           <button type="button" class="btn-add" data-action="open-trip" data-id="${escapeHTML(trip.id)}">LIHAT TRIP</button>
-          <button type="button" class="btn-detail" data-action="join-trip" data-id="${escapeHTML(trip.id)}">GABUNG</button>
+          ${joined
+            ? '<button type="button" class="btn-detail" data-action="leave-trip" data-id="' + escapeHTML(trip.id) + '">KELUAR</button>'
+            : '<button type="button" class="btn-detail" data-action="join-trip" data-id="' + escapeHTML(trip.id) + '">GABUNG</button>'}
           <button type="button" class="btn-small" data-action="sim-join" data-id="${escapeHTML(trip.id)}">+1 SIMULASI</button>
         </div>
         <p class="trip-creator">Host: ${escapeHTML(creator ? creator.name : 'Anon')} ${creator && creator.verified ? '✓' : ''}</p>
@@ -281,6 +287,16 @@ function renderDiscovery() {
         </div>
       </section>
 
+      <section class="about-section" data-aos="fade-up">
+        <h2 class="section-title">TENTANG VIBETRIP</h2>
+        <p class="about-lead">VibeTrip adalah platform pencocokan perjalanan untuk solo traveler. Temukan teman seperjalanan, bagi biaya transportasi, dan susun itinerary bersama secara real-time.</p>
+        <div class="about-grid">
+          <article class="about-card"><h3>Misi</h3><p>Membuat perjalanan solo lebih aman, terjangkau, dan menyenangkan.</p></article>
+          <article class="about-card"><h3>Transparan</h3><p>Biaya sewa dibagi otomatis berdasarkan jumlah peserta.</p></article>
+          <article class="about-card"><h3>Kolaboratif</h3><p>Itinerary disusun bersama dengan voting dan optimasi rute.</p></article>
+        </div>
+      </section>
+
       <section class="safety-section" data-aos="fade-up">
         <h2 class="section-title">SAFETY &amp; TRUST</h2>
         <div class="safety-grid">
@@ -336,6 +352,7 @@ function renderFooter() {
           <h3>Navigasi</h3>
           <nav class="footer-nav" aria-label="Tautan footer">
             <a href="#trip-feed">Eksplorasi</a>
+            <a href="#" data-nav="myTrips">Trip Saya</a>
             <a href="#" data-nav="createTrip">Buat Trip</a>
           </nav>
         </div>
@@ -346,6 +363,45 @@ function renderFooter() {
       </div>
       <p class="footer-copy">Built for Solo Travelers</p>
     </footer>
+  `;
+}
+
+// ---------- My Trips ----------
+function renderMyTrips() {
+  const joined = state.trips.filter((t) => t.members.includes(state.currentUser.id));
+  const cards = joined.map((trip) => {
+    const sc = splitCost(trip);
+    const members = trip.members.map((m) => { const u = getUser(m); return escapeHTML(u ? u.name : m); }).join(', ');
+    return `
+      <article class="trip-card">
+        <div class="trip-card-head">
+          <h3 class="trip-title">${escapeHTML(trip.title)}</h3>
+          <span class="vibe-badge">${escapeHTML(trip.vibe)}</span>
+        </div>
+        <p class="trip-dest">${escapeHTML(trip.destination_area)} • ${escapeHTML(trip.start_date)}</p>
+        <p class="trip-vehicle">${escapeHTML(trip.vehicle_type)}</p>
+        <div class="cost-box">
+          <p><strong>Peserta:</strong> ${trip.members.length}/${trip.max_pax}</p>
+          <p class="cost-per"><strong>Biaya per orang:</strong> ${formatIDR(sc.perPerson)}</p>
+        </div>
+        <p class="trip-creator">Anggota: ${members}</p>
+        <div class="trip-actions">
+          <button type="button" class="btn-add" data-action="open-trip" data-id="${escapeHTML(trip.id)}">LIHAT TRIP</button>
+        </div>
+      </article>
+    `;
+  }).join('');
+  return `
+    ${marqueeHTML()}
+    ${navbarHTML()}
+    <main class="my-trips">
+      <h1 class="section-title">TRIP SAYA</h1>
+      <p class="about-lead">Daftar trip yang sudah Anda ikuti.</p>
+      <div class="trip-grid">
+        ${cards || '<p class="empty-state">Anda belum bergabung ke trip manapun.</p>'}
+      </div>
+    </main>
+    ${renderFooter()}
   `;
 }
 
@@ -497,6 +553,7 @@ function attachEvents() {
       e.preventDefault();
       const v = el.getAttribute('data-nav');
       if (v === 'discovery') state.view = 'discovery';
+      else if (v === 'myTrips') state.view = 'myTrips';
       else if (v === 'createTrip') state.view = 'createTrip';
       state.activeTripId = null;
       render();
@@ -574,6 +631,15 @@ function handleAction(action, el, e) {
       if (trip && !trip.members.includes(state.currentUser.id) && trip.members.length < trip.max_pax) {
         trip.members.push(state.currentUser.id); saveState();
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 }, colors: ['#C4F000','#FF3B8D','#00E5FF'] });
+        render();
+      }
+      break;
+    }
+    case 'leave-trip': {
+      const trip = getTrip(id);
+      if (trip) {
+        trip.members = trip.members.filter((m) => m !== state.currentUser.id);
+        saveState();
         render();
       }
       break;
